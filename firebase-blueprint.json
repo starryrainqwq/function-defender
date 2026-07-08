@@ -1,0 +1,9 @@
+{
+  "users": {
+    "__doc__": {
+      "username": "string",
+      "personalBest": "number",
+      "updatedAt": "timestamp"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Function Defender",
+  "description": "A math-based defense game where players input math function parameters to draw curves that destroy incoming enemies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
