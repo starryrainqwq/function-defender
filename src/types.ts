@@ -72,7 +72,7 @@ export type AchievementId =
   | 'precision_mortar'      // 精准迫击炮：二次函数单次消灭
   | 'straight_romance'      // 直来直去的浪漫：一次函数单次消灭
   | 'blow_it_all_up'        // 全都可以炸完！：炸弹单次引爆
-  | 'at_field'              // 绝对领域场：满血时累计承受伤害
+  | 'at_field'              // 绝对领域场：满血时达到指定分数阈值
   | 'pure_love_warrior';    // 纯爱战神：单局同种函数使用次数
 
 /** 成就等级 1-5，5=MAX */

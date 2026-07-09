@@ -28,8 +28,8 @@ export interface SessionAchievementTracker {
   funcUsageCount: Record<FunctionType, number>;
   /** 单次射击最大击杀数（按函数类型分开） */
   maxKillsPerShot: Record<string, number>;
-  /** 满血时累计承受的伤害 */
-  fullHealthDamageTaken: number;
+  /** 满血时达到的最高分数（用于绝对领域场成就判定） */
+  maxScoreWhileFullHealth: number;
   /** 当前血量（用于判断是否满血） */
   currentHealth: number;
   /** 最大血量 */
@@ -49,7 +49,7 @@ export function createSessionTracker(maxHealth: number): SessionAchievementTrack
       constant_y: 0,
     },
     maxKillsPerShot: {},
-    fullHealthDamageTaken: 0,
+    maxScoreWhileFullHealth: 0,
     currentHealth: maxHealth,
     maxHealth,
   };
@@ -185,8 +185,8 @@ export class AchievementManager {
     const bombKills = tracker.maxKillsPerShot['bomb'] || 0;
     this.checkThresholdAchievement('blow_it_all_up', bombKills);
 
-    // 4. 绝对领域场：满血时累计承受伤害
-    this.checkThresholdAchievement('at_field', tracker.fullHealthDamageTaken);
+    // 4. 绝对领域场：满血时达到的最高分数
+    this.checkThresholdAchievement('at_field', tracker.maxScoreWhileFullHealth);
 
     // 5. 纯爱战神：单局内同种函数最大使用次数
     let maxFuncUsage = 0;

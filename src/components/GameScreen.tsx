@@ -587,10 +587,6 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     state.powerUps = newPowerUps;
     
     if (healthLost > 0) {
-      // 成就追踪：满血时承受伤害
-      if (trackerRef.current && state.health >= maxHealth) {
-        trackerRef.current.fullHealthDamageTaken += healthLost;
-      }
       state.health -= healthLost;
       setHealth(state.health);
       audio.playEscape();
@@ -836,10 +832,6 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     if (hasObstacle) {
       obstacleHit = checkObstacleHit(compiledFormula, isConstantX, constantXVal);
       if (obstacleHit) {
-        // 成就追踪：满血时承受障碍物伤害
-        if (trackerRef.current && state.health >= maxHealth) {
-          trackerRef.current.fullHealthDamageTaken += 1;
-        }
         state.health -= 1;
         setHealth(state.health);
         setObstacleHitFlash(true);
@@ -1032,6 +1024,10 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       const points = Math.floor(basePoints * finalScoreMultiplier);
       state.score += points;
       setScore(state.score);
+      // 成就追踪：满血时最高分数
+      if (trackerRef.current && state.health >= maxHealth && state.score > trackerRef.current.maxScoreWhileFullHealth) {
+        trackerRef.current.maxScoreWhileFullHealth = state.score;
+      }
       
       // 成就追踪：记录单次射击最大击杀数
       if (trackerRef.current) {
