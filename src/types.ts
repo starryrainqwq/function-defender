@@ -172,4 +172,20 @@ export function createDefaultAchievementState(): AchievementState {
     achievements,
     newlyUnlocked: [],
   };
-}
+}  
+// ==================== 用户偏好设置类型定义 ====================  
+  
+export type FloatingButtonPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';  
+export type FloatingButtonTheme = 'amber' | 'green' | 'cyan';  
+export type FloatingButtonSize = 'sm' | 'md' | 'lg';  
+export type FunctionLoadout = FunctionType[];  
+  
+export interface UserPreferences {  
+  floatingButton: {  
+    enabled: boolean;  
+    position: FloatingButtonPosition;  
+    theme: FloatingButtonTheme;  
+    size: FloatingButtonSize;  
+  };  
+  loadout: FunctionLoadout;  
+} 

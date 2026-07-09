@@ -36,7 +36,7 @@ html, body {
   animation: glitch 0.3s infinite;
 }
 
-/* ===== P1 浮动数字 / 终端伤害数字 ===== */
+/* ===== P1 æµ®å¨æ°å­ / ç»ç«¯ä¼¤å®³æ°å­ ===== */
 @keyframes fx-appear {
   0% {
     opacity: 0;
@@ -202,7 +202,7 @@ html, body {
   animation: fx-particle-burst var(--duration, 0.55s) ease-out forwards;
 }
 
-/* ===== P1 发射按钮 / 能量条 ===== */
+/* ===== P1 åå°æé® / è½éæ¡ ===== */
 @keyframes bar-breathe {
   0%, 100% { box-shadow: 0 0 6px #00FF41, inset 0 0 8px rgba(0, 255, 65, 0.25); }
   50% { box-shadow: 0 0 18px #00FF41, inset 0 0 16px rgba(0, 255, 65, 0.45); }
@@ -293,7 +293,7 @@ html, body {
 .fx-corner-bracket.bl { bottom: -2px; left: -2px; border-bottom: 2px solid; border-left: 2px solid; }
 .fx-corner-bracket.br { bottom: -2px; right: -2px; border-bottom: 2px solid; border-right: 2px solid; }
 
-/* ===== 可滚动容器触控规则 ===== */
+/* ===== å¯æ»å¨å®¹å¨è§¦æ§è§å ===== */
 aside,
 .overflow-y-auto,
 [class*="overflow-y-auto"] {
@@ -301,7 +301,7 @@ aside,
   overscroll-behavior: contain;
 }
 
-/* P0-1: 滑块把手自定义样式 - 圆形，白色边框 + #00FF41 填充 */
+/* P0-1: æ»åææèªå®ä¹æ ·å¼ - åå½¢ï¼ç½è²è¾¹æ¡ + #00FF41 å¡«å */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -335,7 +335,7 @@ input[type="range"]::-moz-range-thumb:hover {
   box-shadow: 0 0 12px #00FF41, 0 0 24px rgba(0, 255, 65, 0.7);
 }
 
-/* 滑块轨道 */
+/* æ»åè½¨é */
 input[type="range"]::-webkit-slider-runnable-track {
   height: 8px;
   border-radius: 4px;
@@ -346,9 +346,8 @@ input[type="range"]::-moz-range-track {
   border-radius: 4px;
 }
 
-/* ===== P0-2: 参数面板专用滑块样式（不影响 header 音量滑块） ===== */
+/* ===== P0-2: åæ°é¢æ¿ä¸ç¨æ»åæ ·å¼ï¼ä¸å½±å header é³éæ»åï¼ ===== */
 .param-slider {
-  touch-action: none;
   -webkit-appearance: none;
   appearance: none;
   height: 8px;
@@ -416,14 +415,14 @@ input[type="range"]::-moz-range-track {
   background: transparent;
 }
 
-/* ===== P3: 移动端触屏适配 ===== */
+/* ===== P3: ç§»å¨ç«¯è§¦å±éé ===== */
 @media (pointer: coarse) {
-  /* Canvas 禁止浏览器默认触摸行为（缩放/滚动），由 JS 自行处理双指缩放 */
+  /* Canvas ç¦æ­¢æµè§å¨é»è®¤è§¦æ¸è¡ä¸ºï¼ç¼©æ¾/æ»å¨ï¼ï¼ç± JS èªè¡å¤çåæç¼©æ¾ */
   canvas {
     touch-action: none;
   }
 
-  /* 滑块轨道增大：8px → 14px */
+  /* æ»åè½¨éå¢å¤§ï¼8px â 14px */
   input[type="range"]::-webkit-slider-runnable-track {
     height: 14px;
     border-radius: 7px;
@@ -434,7 +433,7 @@ input[type="range"]::-moz-range-track {
     border-radius: 7px;
   }
 
-  /* 滑块 thumb 增大：16px → 32px，满足 ≥44px 触摸标准 */
+  /* æ»å thumb å¢å¤§ï¼16px â 32pxï¼æ»¡è¶³ â¥44px è§¦æ¸æ å */
   input[type="range"]::-webkit-slider-thumb {
     width: 32px;
     height: 32px;
@@ -449,152 +448,28 @@ input[type="range"]::-moz-range-track {
     box-shadow: 0 0 12px #00FF41, 0 0 24px rgba(0, 255, 65, 0.6);
   }
 
-  /* 滑块容器增加 padding 使总触摸区域 ≥ 44px */
+  /* æ»åå®¹å¨å¢å  padding ä½¿æ»è§¦æ¸åºå â¥ 44px */
   input[type="range"] {
     padding-top: 6px;
     padding-bottom: 6px;
   }
 
-  /* 函数选择按钮：min-height: 44px + padding 增大 */
+  /* å½æ°éæ©æé®ï¼min-height: 44px + padding å¢å¤§ */
   aside button[id] {
     min-height: 44px;
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
   }
 
-  /* 发射按钮：min-height: 56px */
+  /* åå°æé®ï¼min-height: 56px */
   aside > div > div.space-y-3 > div.relative > button {
     min-height: 56px;
   }
 
-  /* 预设按钮 min-height 36px */
+  /* é¢è®¾æé® min-height 36px */
   aside button.flex-1 {
     min-height: 36px;
     padding-top: 0.375rem;
     padding-bottom: 0.375rem;
-  }
-}
-
-/* ===== 全局 coarse 触控热区兜底（覆盖所有页面，而非仅侧边栏） ===== */
-@media (pointer: coarse) {
-  button,
-  a,
-  select,
-  input[type="range"] {
-    min-height: 44px;
-    min-width: 44px;
-  }
-
-  button,
-  a {
-    padding: 0.5rem 0.75rem;
-  }
-
-  select {
-    padding: 0.5rem 1.5rem 0.5rem 0.5rem;
-  }
-
-  /* StartScreen 等页面中的功能卡片 */
-  #start-screen button,
-  #settings-screen button,
-  #tutorial-screen button,
-  #leaderboard-screen button,
-  #achievement-screen button,
-  #login-screen button,
-  #end-screen button {
-    min-height: 44px;
-  }
-
-  /* 所有小按钮图标至少 18px */
-  button svg {
-    min-width: 18px;
-    min-height: 18px;
-  }
-}
-
-/* ===== 横屏紧凑布局（手机横屏高度不足 500px） ===== */
-@media (orientation: landscape) and (max-height: 500px) {
-  html,
-  body {
-    font-size: 14px;
-  }
-
-  /* GameScreen 主屏 */
-  #game-screen {
-    flex-direction: row;
-  }
-
-  #game-screen header {
-    height: 3rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-    gap: 0.5rem;
-  }
-
-  #game-screen header h1 {
-    font-size: 1rem;
-  }
-
-  #game-screen header .text-2xl {
-    font-size: 1.25rem;
-  }
-
-  #game-screen main {
-    flex-direction: row;
-  }
-
-  #game-screen aside {
-    width: clamp(18rem, 30vw, 22rem);
-    padding: 0.5rem;
-    gap: 0.5rem;
-  }
-
-  #game-screen aside .space-y-3 > * {
-    margin-top: 0.25rem;
-    margin-bottom: 0.25rem;
-  }
-
-  #game-screen aside .function-loadout-grid button {
-    min-height: 44px;
-    padding: 0.25rem;
-  }
-
-  #game-screen aside .flex-col.gap-4 {
-    gap: 0.5rem;
-  }
-
-  #game-screen footer {
-    height: 1.5rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  /* 其他页面兜底：允许纵向滚动，防止内容溢出 */
-  #start-screen,
-  #settings-screen,
-  #tutorial-screen,
-  #leaderboard-screen,
-  #achievement-screen,
-  #login-screen,
-  #end-screen {
-    justify-content: flex-start;
-    overflow-y: auto;
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-  }
-
-  #start-screen .absolute,
-  #settings-screen .absolute,
-  #tutorial-screen .absolute,
-  #leaderboard-screen .absolute,
-  #achievement-screen .absolute,
-  #login-screen .absolute,
-  #end-screen .absolute {
-    position: relative;
-    top: auto;
-    left: auto;
-    right: auto;
-    bottom: auto;
-    margin-bottom: 1rem;
   }
 }

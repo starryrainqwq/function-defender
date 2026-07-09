@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import * as math from 'mathjs';
 import { FunctionType, Monster, Difficulty, PowerUp, DLCConfig, RestrictionZone, DLC_MULTIPLIERS } from '../types';
 import { Volume2, LogOut } from 'lucide-react';
 import { ParamSlider } from './ParamSlider';
 import { FireButton } from './FireButton';
+import { FloatingFireButton } from './FloatingFireButton';
 import { ParamPresets } from './ParamPresets';
 import { FloatingTextLayer } from './FloatingTextLayer';
 import { useFloatingTexts } from '../hooks/useFloatingTexts';
@@ -13,6 +14,8 @@ import { ControlPoint, getControlPoints, resolveDrag } from '../lib/curveControl
 import { audio } from '../lib/audio';
 import { Language, i18n } from '../lib/i18n';
 import { SessionAchievementTracker } from '../lib/achievements';
+import { loadPreferences } from '../lib/preferences';
+import { FUNCTION_LABEL_KEYS } from '../lib/functionLabels';
 
 interface Particle {
   x: number;
@@ -121,15 +124,27 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     }
   }, [health, maxHealth]);
   
-  // Control Panel State
-  const [funcType, setFuncType] = useState<FunctionType>('linear');
-  const [params, setParams] = useState<Record<string, string>>(() => getDefaultParams('linear'));
+  // Loadout system
+  const preferences = useMemo(() => loadPreferences(), []);
+  const loadout = preferences.loadout;
+  const initialFunc = loadout[0] ?? 'linear';
+  const [funcType, setFuncType] = useState<FunctionType>(() => initialFunc);
+  const [params, setParams] = useState<Record<string, string>>(() => getDefaultParams(initialFunc));
   const [cooldown, setCooldown] = useState(0);
   const [maxCooldown, setMaxCooldown] = useState(0);
   const [lastUsedFunc, setLastUsedFunc] = useState<FunctionType | null>(null);
   const [formulaError, setFormulaError] = useState<string | null>(null);
   const [volume, setVolume] = useState(audio.volume);
   const [cssShake, setCssShake] = useState(false);
+
+  // Fallback: if current funcType is removed from loadout, switch to first available
+  useEffect(() => {
+    if (!loadout.includes(funcType)) {
+      const fallback = loadout[0] ?? 'linear';
+      setFuncType(fallback);
+      setParams(getDefaultParams(fallback));
+    }
+  }, [funcType, loadout]);
 
   // P2: control point drag state
   const [hoveredControlPoint, setHoveredControlPoint] = useState<ControlPoint | null>(null);
@@ -229,9 +244,10 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
 
   // Handle function type change
   const handleFuncChange = useCallback((type: FunctionType) => {
+    if (!loadout.includes(type)) return;
     setFuncType(type);
     setParams(getDefaultParams(type));
-  }, []);
+  }, [loadout]);
 
   // P1: restore last fired params for current function type
   const handleRestoreLast = useCallback(() => {
@@ -1413,7 +1429,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       
       const key = e.key.toLowerCase();
       
-      const functionShortcuts = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i'];
+      const functionShortcuts = ['q', 'w', 'e', 'r'];
       const inputShortcuts = ['a', 's', 'd', 'f'];
       const presetShortcuts = ['z', 'x', 'c'];
       const actionShortcuts = ['enter', ' '];
@@ -1427,14 +1443,22 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       }
 
       switch (key) {
-        case 'q': handleFuncChange('linear'); break;
-        case 'w': handleFuncChange('quadratic'); break;
-        case 'e': handleFuncChange('rational'); break;
-        case 'r': handleFuncChange('power'); break;
-        case 't': handleFuncChange('trigonometric'); break;
-        case 'y': handleFuncChange('tangent'); break;
-        case 'u': handleFuncChange('constant_x'); break;
-        case 'i': handleFuncChange('constant_y'); break;
+        case 'q': {
+          if (loadout[0]) handleFuncChange(loadout[0]);
+          break;
+        }
+        case 'w': {
+          if (loadout[1]) handleFuncChange(loadout[1]);
+          break;
+        }
+        case 'e': {
+          if (loadout[2]) handleFuncChange(loadout[2]);
+          break;
+        }
+        case 'r': {
+          if (loadout[3]) handleFuncChange(loadout[3]);
+          break;
+        }
         
         case 'a':
           e.preventDefault();
@@ -1540,7 +1564,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
             <div className="absolute inset-0 bg-red-500/20 z-20 pointer-events-none transition-opacity duration-300"></div>
           )}
 
-          <div className="absolute top-4 left-4 p-3 bg-black/80 border border-[#00FF41]/40 rounded-sm font-mono text-[12px] text-[#00FF41] pointer-events-none">
+          <div className="absolute top-4 right-4 p-3 bg-black/80 border border-[#00FF41]/40 rounded-sm font-mono text-[12px] text-[#00FF41] pointer-events-none">
             <p>{t.game_target}</p>
             <p>{t.game_range}</p>
             <p>{t.game_velocity}</p>
@@ -1548,6 +1572,18 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
               <p className="text-[#FFB000] mt-1">{lang === 'zh' ? '倍率' : 'MULT'}: x{finalScoreMultiplier.toFixed(2)}</p>
             )}
           </div>
+
+          <FloatingFireButton
+            enabled={preferences.floatingButton.enabled}
+            position={preferences.floatingButton.position}
+            theme={preferences.floatingButton.theme}
+            size={preferences.floatingButton.size}
+            cooldown={cooldown}
+            maxCooldown={maxCooldown}
+            disabled={cooldown > 0 || formulaError !== null || ((funcType === 'trigonometric' || funcType === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent'))}
+            onFire={handleFire}
+            lang={lang}
+          />
 
           {comboText && (
             <div className="absolute bottom-8 right-8 flex gap-2 items-end pointer-events-none">
@@ -1579,21 +1615,18 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
           <div className="space-y-3">
             <div>
               <label className="block text-[10px] uppercase text-[#00FF41] mb-2 tracking-widest">{t.game_module}</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 function-loadout-grid">
                 {[
-                  { value: 'linear', label: t.game_linear, key: 'Q' },
-                  { value: 'quadratic', label: t.game_quad, key: 'W' },
-                  { value: 'rational', label: t.game_rational, key: 'E' },
-                  { value: 'power', label: t.game_pow, key: 'R' },
-                  { value: 'trigonometric', label: t.game_trig, key: 'T' },
-                  { value: 'tangent', label: t.game_tan, key: 'Y' },
-                  { value: 'constant_x', label: t.game_const_x, key: 'U' },
-                  { value: 'constant_y', label: t.game_const_y, key: 'I' }
+                  { value: loadout[0], label: loadout[0] ? t[FUNCTION_LABEL_KEYS[loadout[0]]] : '', key: 'Q' },
+                  { value: loadout[1], label: loadout[1] ? t[FUNCTION_LABEL_KEYS[loadout[1]]] : '', key: 'W' },
+                  { value: loadout[2], label: loadout[2] ? t[FUNCTION_LABEL_KEYS[loadout[2]]] : '', key: 'E' },
+                  { value: loadout[3], label: loadout[3] ? t[FUNCTION_LABEL_KEYS[loadout[3]]] : '', key: 'R' },
                 ].map((item) => {
                   const isTrigCooldown = (item.value === 'trigonometric' || item.value === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent');
                   return (
                   <button
                     key={item.value}
+                    id={`func-btn-${item.value}`}
                     disabled={isTrigCooldown}
                     onClick={() => handleFuncChange(item.value as FunctionType)}
                     className={`text-left px-2 py-2 text-xs font-mono border transition-colors flex flex-col items-center justify-center text-center gap-1 ${

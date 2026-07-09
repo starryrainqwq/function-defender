@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, Globe, Trophy, LogOut, User, Shield, AlertTriangle, Flame } from 'lucide-react';
+import { Volume2, Globe, Trophy, LogOut, User, Shield, AlertTriangle, Flame, Settings } from 'lucide-react';
 import { audio } from '../lib/audio';
 import { Language, i18n } from '../lib/i18n';
 import { Difficulty, DLCMode, DLCConfig, PressureLevel, ObstacleLevel, DLC_MULTIPLIERS } from '../types';
@@ -9,13 +9,14 @@ interface StartScreenProps {
   onTutorial: () => void;
   onLeaderboard: () => void;
   onAchievements: () => void;
+  onSettings: () => void;
   onLogout: () => void;
   lang: Language;
   setLang: (lang: Language) => void;
   currentUser: any;
 }
 
-export function StartScreen({ onStart, onTutorial, onLeaderboard, onAchievements, onLogout, lang, setLang, currentUser }: StartScreenProps) {
+export function StartScreen({ onStart, onTutorial, onLeaderboard, onAchievements, onSettings, onLogout, lang, setLang, currentUser }: StartScreenProps) {
   const [volume, setVolume] = useState(audio.volume);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [activeModes, setActiveModes] = useState<DLCMode[]>([]);
@@ -90,6 +91,15 @@ export function StartScreen({ onStart, onTutorial, onLeaderboard, onAchievements
           <Trophy size={18} className="text-[#00FFFF] group-hover:scale-110 transition-transform" />
           <span className="text-[#00FFFF] font-mono tracking-widest text-sm uppercase">
             {lang === 'zh' ? '成就系统' : 'ACHIEVEMENTS'}
+          </span>
+        </button>
+        <button 
+          onClick={onSettings}
+          className="flex items-center gap-2 bg-black/80 p-3 border border-[#00FF41]/60 hover:bg-[#00FF41]/20 transition-colors shadow-[0_0_10px_rgba(0,255,65,0.1)] group"
+        >
+          <Settings size={18} className="text-[#00FF41] group-hover:scale-110 transition-transform" />
+          <span className="text-[#00FF41] font-mono tracking-widest text-sm uppercase">
+            {lang === 'zh' ? '设置' : 'SETTINGS'}
           </span>
         </button>
         <button 

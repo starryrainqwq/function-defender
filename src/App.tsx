@@ -12,6 +12,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { LeaderboardScreen } from './components/LeaderboardScreen';
 import { AchievementScreen } from './components/AchievementScreen';
 import { AchievementUnlockModal } from './components/AchievementUnlockModal';
+import { SettingsScreen } from './components/SettingsScreen';
 import { ScreenType, Difficulty, DLCConfig, AchievementId, AchievementLevel } from './types';
 import { audio } from './lib/audio';
 import { Language } from './lib/i18n';
@@ -25,7 +26,7 @@ export default function App() {
   const [personalBest, setPersonalBest] = useState<number>(0);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   
-  const [currentScreen, setCurrentScreen] = useState<ScreenType | 'login' | 'leaderboard' | 'achievements'>('login');
+  const [currentScreen, setCurrentScreen] = useState<ScreenType | 'login' | 'leaderboard' | 'achievements' | 'settings'>('login');
   const [lastScore, setLastScore] = useState(0);
   const [isNewRecord, setIsNewRecord] = useState(false);
   const [lang, setLang] = useState<Language>('zh');
@@ -108,7 +109,15 @@ export default function App() {
     setCurrentScreen('achievements');
   };
 
+  const handleSettings = () => {
+    setCurrentScreen('settings');
+  };
+
   const handleAchievementBack = () => {
+    setCurrentScreen('start');
+  };
+
+  const handleSettingsBack = () => {
     setCurrentScreen('start');
   };
 
@@ -190,12 +199,13 @@ export default function App() {
   return (
     <div className="w-full h-screen bg-[#000000] text-[#FFFFFF] font-sans overflow-hidden flex flex-col border-4 border-[#00FF41]">
       {currentScreen === 'login' && <LoginScreen onLogin={handleLogin} lang={lang} />}
-      {currentScreen === 'start' && <StartScreen onStart={handleStart} onTutorial={handleTutorial} onLeaderboard={handleLeaderboard} onAchievements={handleAchievements} lang={lang} setLang={setLang} onLogout={handleLogout} currentUser={currentUser} />}
+      {currentScreen === 'start' && <StartScreen onStart={handleStart} onTutorial={handleTutorial} onLeaderboard={handleLeaderboard} onAchievements={handleAchievements} onSettings={handleSettings} lang={lang} setLang={setLang} onLogout={handleLogout} currentUser={currentUser} />}
       {currentScreen === 'game' && <GameScreen onGameOver={handleGameOver} onQuit={handleRestart} lang={lang} setLang={setLang} difficulty={difficulty} dlcConfig={dlcConfig} getSessionTracker={getSessionTracker} />}
       {currentScreen === 'end' && <EndScreen score={lastScore} onRestart={handleRestart} lang={lang} setLang={setLang} personalBest={personalBest} isNewRecord={isNewRecord} currentUser={currentUser} />}
       {currentScreen === 'tutorial' && <TutorialScreen onFinish={handleRestart} lang={lang} />}
       {currentScreen === 'leaderboard' && <LeaderboardScreen onBack={handleRestart} lang={lang} currentUser={currentUser} personalBest={personalBest} />}
       {currentScreen === 'achievements' && <AchievementScreen lang={lang} onBack={handleAchievementBack} getAchievement={(id) => achievementManager.getAchievement(id)} />}
+      {currentScreen === 'settings' && <SettingsScreen lang={lang} onBack={handleSettingsBack} />}
       {/* 成就解锁弹窗 */}
       {unlockQueue.length > 0 && <AchievementUnlockModal lang={lang} unlocks={unlockQueue} onClose={handleCloseUnlockModal} />}
     </div>
