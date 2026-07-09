@@ -331,6 +331,75 @@ input[type="range"]::-moz-range-track {
   border-radius: 4px;
 }
 
+/* ===== P0-2: 参数面板专用滑块样式（不影响 header 音量滑块） ===== */
+.param-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  border: 1px solid rgba(0, 255, 65, 0.25);
+  box-shadow:
+    0 0 6px rgba(0, 255, 65, 0.15),
+    inset 0 0 4px rgba(0, 0, 0, 0.8);
+  transition: box-shadow 0.2s ease;
+}
+
+.param-slider:focus,
+.param-slider:hover {
+  box-shadow:
+    0 0 10px rgba(0, 255, 65, 0.35),
+    inset 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
+.param-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00FF41;
+  border: 2px solid #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 0 8px #00FF41, 0 0 16px rgba(0, 255, 65, 0.5);
+  transition: transform 0.15s ease;
+  margin-top: -5px; /* center 16px thumb on 8px track */
+}
+
+.param-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 12px #00FF41, 0 0 24px rgba(0, 255, 65, 0.7);
+}
+
+.param-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #00FF41;
+  border: 2px solid #FFFFFF;
+  cursor: pointer;
+  box-shadow: 0 0 8px #00FF41, 0 0 16px rgba(0, 255, 65, 0.5);
+  transition: transform 0.15s ease;
+}
+
+.param-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 12px #00FF41, 0 0 24px rgba(0, 255, 65, 0.7);
+}
+
+.param-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 4px;
+  background: transparent;
+}
+
+.param-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+  background: transparent;
+}
+
 /* ===== P3: 移动端触屏适配 ===== */
 @media (pointer: coarse) {
   /* Canvas 禁止浏览器默认触摸行为（缩放/滚动），由 JS 自行处理双指缩放 */

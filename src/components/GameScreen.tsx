@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as math from 'mathjs';
 import { FunctionType, Monster, Difficulty, PowerUp, DLCConfig, RestrictionZone, DLC_MULTIPLIERS } from '../types';
-import { Flame, Volume2, VolumeX, LogOut } from 'lucide-react';
+import { Volume2, LogOut } from 'lucide-react';
+import { ParamSlider } from './ParamSlider';
+import { PARAMS_CONFIG, getDefaultParams } from '../lib/paramConfig';
 import { audio } from '../lib/audio';
 import { Language, i18n } from '../lib/i18n';
 import { SessionAchievementTracker } from '../lib/achievements';
@@ -29,7 +31,7 @@ interface GameScreenProps {
 
 export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcConfig, getSessionTracker }: GameScreenProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const requestRef = useRef<number>();
+  const requestRef = useRef<number | undefined>(undefined);
   const t = i18n[lang];
   
   const { activeModes } = dlcConfig;
@@ -113,7 +115,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
   
   // Control Panel State
   const [funcType, setFuncType] = useState<FunctionType>('linear');
-  const [params, setParams] = useState<Record<string, string>>({ k: '1', b: '0' });
+  const [params, setParams] = useState<Record<string, string>>(() => getDefaultParams('linear'));
   const [cooldown, setCooldown] = useState(0);
   const [lastUsedFunc, setLastUsedFunc] = useState<FunctionType | null>(null);
   const [formulaError, setFormulaError] = useState<string | null>(null);
@@ -210,17 +212,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
   // Handle function type change
   const handleFuncChange = useCallback((type: FunctionType) => {
     setFuncType(type);
-    
-    switch (type) {
-      case 'linear': setParams({ k: '1', b: '0' }); break;
-      case 'quadratic': setParams({ a: '1', b: '0', c: '0' }); break;
-      case 'rational': setParams({ k: '1', h: '0', m: '0' }); break;
-      case 'power': setParams({ a: '1', n: '2' }); break;
-      case 'trigonometric': setParams({ A: '1', w: '1', phi: '0' }); break;
-      case 'tangent': setParams({ A: '1', w: '1', phi: '0' }); break;
-      case 'constant_x': setParams({ k: '0' }); break;
-      case 'constant_y': setParams({ k: '0' }); break;
-    }
+    setParams(getDefaultParams(type));
   }, []);
 
   const handleParamChange = (key: string, value: string) => {
@@ -1050,12 +1042,8 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     const isTrig = funcType === 'trigonometric' || funcType === 'tangent';
     setCooldown(isTrig ? baseTrigCooldown : baseCooldown);
     setLastUsedFunc(funcType);
-    
-    setParams((prev: Record<string, string>) => {
-      const newP = { ...prev };
-      for (const k in newP) newP[k] = '';
-      return newP;
-    });
+
+    // P0: 发射后不清空参数，保留上次值以便微调后再次发射
   };
 
   const handleFireRef = useRef(handleFire);
@@ -1262,45 +1250,17 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
                   {lang === 'zh' ? '无效公式' : 'INVALID FORMULA'}
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                {funcType === 'linear' && (
-                  <>
-                    <ParamInput label="k" value={params.k} onChange={(v) => handleParamChange('k', v)} id="param-input-0" shortcut="A" />
-                    <ParamInput label="b" value={params.b} onChange={(v) => handleParamChange('b', v)} id="param-input-1" shortcut="S" />
-                  </>
-                )}
-                {funcType === 'quadratic' && (
-                  <>
-                    <ParamInput label="a" value={params.a} onChange={(v) => handleParamChange('a', v)} id="param-input-0" shortcut="A" />
-                    <ParamInput label="b" value={params.b} onChange={(v) => handleParamChange('b', v)} id="param-input-1" shortcut="S" />
-                    <ParamInput label="c" value={params.c} onChange={(v) => handleParamChange('c', v)} id="param-input-2" shortcut="D" />
-                  </>
-                )}
-                {funcType === 'rational' && (
-                  <>
-                    <ParamInput label="k" value={params.k} onChange={(v) => handleParamChange('k', v)} id="param-input-0" shortcut="A" />
-                    <ParamInput label="h" value={params.h} onChange={(v) => handleParamChange('h', v)} id="param-input-1" shortcut="S" />
-                    <ParamInput label="m" value={params.m} onChange={(v) => handleParamChange('m', v)} id="param-input-2" shortcut="D" />
-                  </>
-                )}
-                {funcType === 'power' && (
-                  <>
-                    <ParamInput label="a" value={params.a} onChange={(v) => handleParamChange('a', v)} id="param-input-0" shortcut="A" />
-                    <ParamInput label="n" value={params.n} onChange={(v) => handleParamChange('n', v)} id="param-input-1" shortcut="S" />
-                  </>
-                )}
-                {(funcType === 'trigonometric' || funcType === 'tangent') && (
-                  <>
-                    <ParamInput label="A" value={params.A} onChange={(v) => handleParamChange('A', v)} id="param-input-0" shortcut="A" />
-                    <ParamInput label="ω (w)" value={params.w} onChange={(v) => handleParamChange('w', v)} id="param-input-1" shortcut="S" />
-                    <ParamInput label="φ (phi)" value={params.phi} onChange={(v) => handleParamChange('phi', v)} id="param-input-2" shortcut="D" />
-                  </>
-                )}
-                {(funcType === 'constant_x' || funcType === 'constant_y') && (
-                  <>
-                    <ParamInput label="k" value={params.k} onChange={(v) => handleParamChange('k', v)} id="param-input-0" shortcut="A" />
-                  </>
-                )}
+              <div className="flex flex-col gap-4">
+                {PARAMS_CONFIG[funcType].map((meta, index) => (
+                  <ParamSlider
+                    key={`${funcType}-${meta.key}`}
+                    meta={meta}
+                    value={params[meta.key] ?? ''}
+                    id={`param-input-${index}`}
+                    shortcut={['A', 'S', 'D', 'F'][index] ?? ''}
+                    onChange={(v) => handleParamChange(meta.key, v)}
+                  />
+                ))}
               </div>
             </div>
 
@@ -1337,18 +1297,3 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
   );
 }
 
-function ParamInput({ label, value, onChange, id, shortcut }: { label: string, value: string, onChange: (v: string) => void, id: string, shortcut: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <label className="text-xs font-mono text-[#00FF41]/80">{label} <span className="opacity-50">[{shortcut}]</span></label>
-      <input 
-        id={id}
-        type="number" 
-        step="0.1"
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-16 bg-black border border-[#00FF41]/30 text-right p-1 font-mono text-[#00FF41] outline-none focus:border-[#00FF41]"
-      />
-    </div>
-  );
-}
