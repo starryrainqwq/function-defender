@@ -269,7 +269,7 @@
   border-radius: 50%;
   pointer-events: none;
   will-change: transform, opacity, filter;
-  animation: spark-fall 0.7s ease-out forwards;
+  animation: spark-fall var(--duration, 0.7s) ease-out forwards;
 }
 
 .fx-corner-bracket {

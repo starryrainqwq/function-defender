@@ -3,7 +3,13 @@ import * as math from 'mathjs';
 import { FunctionType, Monster, Difficulty, PowerUp, DLCConfig, RestrictionZone, DLC_MULTIPLIERS } from '../types';
 import { Volume2, LogOut } from 'lucide-react';
 import { ParamSlider } from './ParamSlider';
-import { PARAMS_CONFIG, getDefaultParams } from '../lib/paramConfig';
+import { FireButton } from './FireButton';
+import { ParamPresets } from './ParamPresets';
+import { FloatingTextLayer } from './FloatingTextLayer';
+import { useFloatingTexts } from '../hooks/useFloatingTexts';
+import { createKillParticles, createShockwave, Shockwave } from '../lib/combatEffects';
+import { PARAMS_CONFIG, getDefaultParams, getParamMeta } from '../lib/paramConfig';
+import { ControlPoint, getControlPoints, resolveDrag } from '../lib/curveControlPoints';
 import { audio } from '../lib/audio';
 import { Language, i18n } from '../lib/i18n';
 import { SessionAchievementTracker } from '../lib/achievements';
@@ -17,6 +23,8 @@ interface Particle {
   maxLife: number;
   color: string;
   size?: number;
+  hasTrail?: boolean;
+  trailLength?: number;
 }
 
 interface GameScreenProps {
@@ -117,10 +125,19 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
   const [funcType, setFuncType] = useState<FunctionType>('linear');
   const [params, setParams] = useState<Record<string, string>>(() => getDefaultParams('linear'));
   const [cooldown, setCooldown] = useState(0);
+  const [maxCooldown, setMaxCooldown] = useState(0);
   const [lastUsedFunc, setLastUsedFunc] = useState<FunctionType | null>(null);
   const [formulaError, setFormulaError] = useState<string | null>(null);
   const [volume, setVolume] = useState(audio.volume);
   const [cssShake, setCssShake] = useState(false);
+
+  // P2: control point drag state
+  const [hoveredControlPoint, setHoveredControlPoint] = useState<ControlPoint | null>(null);
+  const draggingControlPoint = useRef<ControlPoint | null>(null);
+
+  // P1: remember last fired params per function type
+  const [lastFiredParams, setLastFiredParams] = useState<Record<FunctionType, Record<string, string>>>({} as Record<FunctionType, Record<string, string>>);
+  const floatingTexts = useFloatingTexts(10);
 
   // Mutable Game Data (Ref for game loop)
   const gameState = useRef({
@@ -128,6 +145,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     powerUps: [] as PowerUp[],
     particles: [] as Particle[],
     bgParticles: [] as Particle[],
+    shockwaves: [] as Shockwave[],
     shakeTime: 0,
     shakeIntensity: 0,
     lastSpawnTime: 0,
@@ -214,6 +232,14 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     setFuncType(type);
     setParams(getDefaultParams(type));
   }, []);
+
+  // P1: restore last fired params for current function type
+  const handleRestoreLast = useCallback(() => {
+    const saved = lastFiredParams[funcType];
+    if (saved) {
+      setParams(saved);
+    }
+  }, [funcType, lastFiredParams]);
 
   const handleParamChange = (key: string, value: string) => {
     if (value === '' || value === '-' || value === '.' || value === '-.' || !isNaN(Number(value))) {
@@ -339,6 +365,61 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       }
     }
     ctx.stroke();
+  };
+
+  // P2: draw draggable control points + guide lines
+  const drawControlPoints = (
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    scale: number,
+    points: ControlPoint[]
+  ) => {
+    for (const p of points) {
+      if (!p.visible) continue;
+
+      const px = width / 2 + p.graphX * scale;
+      const py = height / 2 - p.graphY * scale;
+      const isHovered = hoveredControlPoint?.key === p.key;
+      const isDragging = draggingControlPoint.current?.key === p.key;
+      const radius = (isHovered || isDragging ? 1.2 : 1) * 5; // base 5px, hover/drag 6px
+
+      // Guide dashed lines to axes
+      if (isHovered || isDragging) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        // vertical guide to x-axis
+        ctx.moveTo(px, py);
+        ctx.lineTo(px, height / 2);
+        // horizontal guide to y-axis
+        ctx.moveTo(px, py);
+        ctx.lineTo(width / 2, py);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // Glow ring
+      ctx.save();
+      ctx.shadowBlur = isDragging ? 16 : 10;
+      ctx.shadowColor = '#00FF41';
+      ctx.fillStyle = '#00FF41';
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // White core
+      ctx.save();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(px, py, radius * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   };
 
   // Draw monsters
@@ -606,6 +687,18 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     }
     state.particles = newParticles;
 
+    // Update shockwaves
+    const newShockwaves: Shockwave[] = [];
+    for (const s of state.shockwaves) {
+      s.life -= dt;
+      const t = 1 - s.life / s.maxLife;
+      s.radius = s.maxRadius * t;
+      if (s.life > 0) {
+        newShockwaves.push(s);
+      }
+    }
+    state.shockwaves = newShockwaves;
+
     if (state.shakeTime > 0) {
       state.shakeTime -= dt;
     } else {
@@ -640,6 +733,10 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
 
     drawCoordinateSystem(ctx, canvas.width, canvas.height, scale);
     drawCurve(ctx, canvas.width, canvas.height, scale);
+
+    // P2: draw control points on top of the curve
+    const controlPoints = getControlPoints(funcType, params);
+    drawControlPoints(ctx, canvas.width, canvas.height, scale, controlPoints);
     
     // Draw obstacle zones (retro tech sci-fi style, red restriction zones)
     drawObstacleZones(ctx, canvas.width, canvas.height, scale, time);
@@ -730,6 +827,21 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       ctx.restore();
     }
 
+    // Draw shockwaves
+    for (const s of state.shockwaves) {
+      const progress = s.life / s.maxLife;
+      ctx.save();
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2 * progress + 0.5;
+      ctx.globalAlpha = progress;
+      ctx.beginPath();
+      const px = canvas.width / 2 + s.x * scale;
+      const py = canvas.height / 2 - s.y * scale;
+      ctx.arc(px, py, s.radius * scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // Draw particles
     for (const p of state.particles) {
       const progress = p.life / p.maxLife;
@@ -737,8 +849,26 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       ctx.globalAlpha = progress;
       const px = canvas.width / 2 + p.x * scale;
       const py = canvas.height / 2 - p.y * scale;
-      ctx.beginPath();
       const radius = p.size ? (p.size * progress) : (4 * progress);
+
+      // Draw optional trail
+      if (p.hasTrail && p.trailLength && p.trailLength > 0 && (Math.abs(p.vx) > 0.001 || Math.abs(p.vy) > 0.001)) {
+        const trailScale = p.trailLength / scale;
+        const gx = -p.vx * trailScale * 0.5;
+        const gy = p.vy * trailScale * 0.5;
+        const grad = ctx.createLinearGradient(px, py, px + gx, py + gy);
+        grad.addColorStop(0, p.color);
+        grad.addColorStop(1, 'transparent');
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = radius * 1.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + gx, py + gy);
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
       ctx.arc(px, py, radius, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -855,15 +985,16 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       }
     }
 
-    // Collision detection with monsters
+    // Collision detection with monsters (two-pass: detect all hits first, then apply VFX based on total hitCount)
+    const hitMonsters: Monster[] = [];
     for (const m of state.monsters) {
       const leftX = m.x - m.width / 2;
       const rightX = m.x + m.width / 2;
       const topY = m.y + m.height / 2;
       const bottomY = m.y - m.height / 2;
-      
+
       let isHit = false;
-      
+
       if (m.type === 'ghost' && (funcType === 'linear' || funcType === 'trigonometric' || funcType === 'tangent' || funcType === 'constant_x' || funcType === 'constant_y')) {
         isHit = false;
       } else {
@@ -891,29 +1022,37 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
 
       if (isHit) {
         m.hp--;
-        
-        for (let j = 0; j < 20; j++) {
-          const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 0.05 + 0.02;
-          state.particles.push({
-            x: m.x,
-            y: m.y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            life: 500 + Math.random() * 500,
-            maxLife: 1000,
-            color: Math.random() > 0.5 ? '#00FF41' : '#FFFFFF',
-            size: 4 + Math.random() * 4
-          });
-        }
-        
         if (m.hp <= 0) {
           hitCount++;
+          hitMonsters.push(m);
         } else {
           survivingMonsters.push(m);
         }
       } else {
         survivingMonsters.push(m);
+      }
+    }
+
+    // P1: generate enhanced kill particles / shockwaves / floating texts once hitCount is known
+    if (hitCount > 0) {
+      const isBomb = false;
+      for (const m of hitMonsters) {
+        const newParticles = createKillParticles({ x: m.x, y: m.y, hitCount, isBomb });
+        for (const p of newParticles) {
+          state.particles.push({
+            x: p.x,
+            y: p.y,
+            vx: p.vx,
+            vy: p.vy,
+            life: p.life,
+            maxLife: p.maxLife,
+            color: p.color,
+            size: p.size,
+            hasTrail: p.hasTrail,
+            trailLength: p.trailLength,
+          });
+        }
+        state.shockwaves.push(createShockwave({ x: m.x, y: m.y, hitCount, isBomb }));
       }
     }
 
@@ -976,20 +1115,25 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
             setTimeout(() => setCssShake(false), 500);
             
             let bombKillCount = 0;
-            for (const m of state.monsters) {
-               for (let j = 0; j < 40; j++) {
-                const angle = Math.random() * Math.PI * 2;
-                const speed = Math.random() * 0.15 + 0.05;
+            const bombTargets = [...state.monsters];
+            for (const m of bombTargets) {
+              const bombCount = Math.max(hitCount + bombKillCount, 1);
+              const newParticles = createKillParticles({ x: m.x, y: m.y, hitCount: bombCount, isBomb: true });
+              for (const p of newParticles) {
                 state.particles.push({
-                  x: m.x,
-                  y: m.y,
-                  vx: Math.cos(angle) * speed,
-                  vy: Math.sin(angle) * speed,
-                  life: 800 + Math.random() * 500,
-                  maxLife: 1300,
-                  color: '#FF3D00'
+                  x: p.x,
+                  y: p.y,
+                  vx: p.vx,
+                  vy: p.vy,
+                  life: p.life,
+                  maxLife: p.maxLife,
+                  color: p.color,
+                  size: p.size,
+                  hasTrail: p.hasTrail,
+                  trailLength: p.trailLength,
                 });
               }
+              state.shockwaves.push(createShockwave({ x: m.x, y: m.y, hitCount: bombCount, isBomb: true }));
               hitCount++;
               bombKillCount++;
             }
@@ -1012,6 +1156,16 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
 
     if (hitCount > 0) {
       audio.playHit();
+      // P2: combo sound layering
+      if (hitCount >= 10) {
+        audio.playComboDrone(1.2);
+      }
+      if (hitCount >= 5) {
+        audio.playComboDing();
+      }
+      if (hitCount >= 3) {
+        audio.playComboResonance();
+      }
       const basePoints = hitCount * 10 * hitCount;
       const points = Math.floor(basePoints * finalScoreMultiplier);
       state.score += points;
@@ -1020,7 +1174,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       if (trackerRef.current && state.health >= maxHealth && state.score > trackerRef.current.maxScoreWhileFullHealth) {
         trackerRef.current.maxScoreWhileFullHealth = state.score;
       }
-      
+
       // 成就追踪：记录单次射击最大击杀数
       if (trackerRef.current) {
         const key = funcType;
@@ -1028,26 +1182,219 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
           trackerRef.current.maxKillsPerShot[key] = hitCount;
         }
       }
-      
+
+      // P1: floating score texts at each killed monster position
+      const canvas = canvasRef.current;
+      const scale = canvas ? Math.min(canvas.width / 12, canvas.height / 12) : 1;
+      for (const m of hitMonsters) {
+        const px = (canvas?.width ?? 0) / 2 + m.x * scale;
+        const py = (canvas?.height ?? 0) / 2 - m.y * scale;
+        let color = '#00FF41';
+        let textScale = 1;
+        if (hitCount >= 5) {
+          color = '#FF3333';
+          textScale = 1.3;
+        } else if (hitCount >= 3) {
+          color = '#FFD700';
+          textScale = 1.15;
+        }
+        floatingTexts.add({
+          x: px,
+          y: py,
+          text: `+${points}`,
+          color,
+          scale: textScale,
+        });
+      }
+
       setComboText({ text: hitCount > 1 ? `${hitCount}x ${lang === 'zh' ? '连击！' : 'COMBO!'} +${points}` : `${lang === 'zh' ? '命中！' : 'HIT!'} +${points}`, opacity: 1 });
       setTimeout(() => setComboText(null), 1500);
 
-      if (hitCount > 1) {
-        state.shakeTime = 300;
-        state.shakeIntensity = hitCount * 5;
-      }
+      // P1: dynamic screen shake based on combo count
+      state.shakeTime = 300;
+      state.shakeIntensity = Math.min(hitCount * 3, 20);
     }
 
     // Start cooldown
     const isTrig = funcType === 'trigonometric' || funcType === 'tangent';
-    setCooldown(isTrig ? baseTrigCooldown : baseCooldown);
+    const nextCooldown = isTrig ? baseTrigCooldown : baseCooldown;
+    setCooldown(nextCooldown);
+    setMaxCooldown(nextCooldown);
     setLastUsedFunc(funcType);
 
-    // P0: 发射后不清空参数，保留上次值以便微调后再次发射
+    // P1: remember params for current function type (after successful fire)
+    setLastFiredParams((prev) => ({ ...prev, [funcType]: { ...params } }));
   };
 
   const handleFireRef = useRef(handleFire);
   handleFireRef.current = handleFire;
+
+  // P2: canvas mouse/touch drag interaction for control points
+  const dragThrottleRef = useRef<number | null>(null);
+  const pendingDragParams = useRef<Partial<Record<string, string>> | null>(null);
+
+  const commitDragParams = useCallback((updates: Partial<Record<string, string>>) => {
+    if (Object.keys(updates).length === 0) return;
+    pendingDragParams.current = { ...(pendingDragParams.current || {}), ...updates };
+    if (dragThrottleRef.current) return;
+    dragThrottleRef.current = window.setTimeout(() => {
+      dragThrottleRef.current = null;
+      if (pendingDragParams.current) {
+        const next = pendingDragParams.current;
+        setParams((prev) => {
+          const merged: Record<string, string> = { ...prev };
+          for (const key of Object.keys(next)) {
+            const val = next[key];
+            if (val !== undefined) merged[key] = val;
+          }
+          return merged;
+        });
+        pendingDragParams.current = null;
+      }
+    }, 16);
+  }, []);
+
+  const getPointerGraphPos = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scale = Math.min(canvas.width / 12, canvas.height / 12);
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    const graphX = (px - canvas.width / 2) / scale;
+    const graphY = (canvas.height / 2 - py) / scale;
+    return { graphX, graphY };
+  }, []);
+
+  const findControlPointAtPos = useCallback((clientX: number, clientY: number): ControlPoint | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const pos = getPointerGraphPos(clientX, clientY);
+    if (!pos) return null;
+    const scale = Math.min(canvas.width / 12, canvas.height / 12);
+    const points = getControlPoints(funcType, params);
+    const hitRadiusPx = 16; // generous hit area for control points
+
+    for (const p of points) {
+      if (!p.visible) continue;
+      const px = canvas.width / 2 + p.graphX * scale;
+      const py = canvas.height / 2 - p.graphY * scale;
+      const dx = clientX - (canvas.getBoundingClientRect().left + px);
+      const dy = clientY - (canvas.getBoundingClientRect().top + py);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= hitRadiusPx) return p;
+    }
+
+    // For constant_x / constant_y: also allow grabbing anywhere along the line
+    if (funcType === 'constant_x') {
+      const kVal = parseFloat(params.k || '0');
+      const linePx = canvas.width / 2 + kVal * scale;
+      const rectLeft = canvas.getBoundingClientRect().left;
+      if (Math.abs(clientX - (rectLeft + linePx)) <= hitRadiusPx) {
+        const point = points.find((p) => p.key === 'k');
+        if (point) return point;
+      }
+    } else if (funcType === 'constant_y') {
+      const kVal = parseFloat(params.k || '0');
+      const linePy = canvas.height / 2 - kVal * scale;
+      const rectTop = canvas.getBoundingClientRect().top;
+      if (Math.abs(clientY - (rectTop + linePy)) <= hitRadiusPx) {
+        const point = points.find((p) => p.key === 'k');
+        if (point) return point;
+      }
+    }
+
+    return null;
+  }, [funcType, params, getPointerGraphPos]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handlePointerMove = (clientX: number, clientY: number) => {
+      if (draggingControlPoint.current) {
+        const pos = getPointerGraphPos(clientX, clientY);
+        if (!pos) return;
+        const meta = getParamMeta(funcType, draggingControlPoint.current.key);
+        if (!meta) return;
+        const updates = resolveDrag(funcType, params, pos.graphX, pos.graphY, meta);
+        if (updates) commitDragParams(updates);
+        return;
+      }
+
+      const hovered = findControlPointAtPos(clientX, clientY);
+      setHoveredControlPoint((prev) => {
+        if (prev?.key === hovered?.key) return prev;
+        return hovered;
+      });
+      canvas.style.cursor = hovered ? 'grab' : 'default';
+    };
+
+    const onMouseMove = (e: MouseEvent) => handlePointerMove(e.clientX, e.clientY);
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      const p = findControlPointAtPos(e.clientX, e.clientY);
+      if (p) {
+        e.preventDefault();
+        draggingControlPoint.current = p;
+        canvas.style.cursor = 'grabbing';
+      }
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        const p = findControlPointAtPos(e.touches[0].clientX, e.touches[0].clientY);
+        if (p) {
+          e.preventDefault();
+          draggingControlPoint.current = p;
+        }
+      }
+    };
+
+    const endDrag = () => {
+      if (draggingControlPoint.current) {
+        draggingControlPoint.current = null;
+        canvas.style.cursor = 'default';
+        if (dragThrottleRef.current) {
+          clearTimeout(dragThrottleRef.current);
+          dragThrottleRef.current = null;
+        }
+      if (pendingDragParams.current) {
+        const next = pendingDragParams.current;
+        setParams((prev) => {
+          const merged: Record<string, string> = { ...prev };
+          for (const key of Object.keys(next)) {
+            const val = next[key];
+            if (val !== undefined) merged[key] = val;
+          }
+          return merged;
+        });
+        pendingDragParams.current = null;
+      }
+      }
+    };
+
+    canvas.addEventListener('mousemove', onMouseMove);
+    canvas.addEventListener('mousedown', onMouseDown);
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('touchend', endDrag);
+
+    return () => {
+      canvas.removeEventListener('mousemove', onMouseMove);
+      canvas.removeEventListener('mousedown', onMouseDown);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('mouseup', endDrag);
+      window.removeEventListener('touchend', endDrag);
+    };
+  }, [funcType, params, getPointerGraphPos, findControlPointAtPos, commitDragParams]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1068,9 +1415,10 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
       
       const functionShortcuts = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i'];
       const inputShortcuts = ['a', 's', 'd', 'f'];
+      const presetShortcuts = ['z', 'x', 'c'];
       const actionShortcuts = ['enter', ' '];
       
-      if (functionShortcuts.includes(key) || inputShortcuts.includes(key) || actionShortcuts.includes(key)) {
+      if (functionShortcuts.includes(key) || inputShortcuts.includes(key) || presetShortcuts.includes(key) || actionShortcuts.includes(key)) {
         if (isInput && key !== 'enter') {
           e.preventDefault();
         }
@@ -1105,6 +1453,18 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
           document.getElementById('param-input-3')?.focus();
           break;
 
+        case 'z':
+          e.preventDefault();
+          handleRestoreLast();
+          break;
+        case 'x':
+          e.preventDefault();
+          handleRestoreLast();
+          break;
+        case 'c':
+          e.preventDefault();
+          break;
+
         case 'enter':
         case ' ':
           if (!isInput) {
@@ -1117,7 +1477,7 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleFuncChange]);
+  }, [handleFuncChange, handleRestoreLast]);
 
   return (
     <div id="game-screen" className={`flex flex-col w-full h-full overflow-hidden ${cssShake ? 'animate-shake' : ''}`}>
@@ -1201,10 +1561,18 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
             </div>
           )}
 
-          <canvas 
-            ref={canvasRef} 
+          <FloatingTextLayer texts={floatingTexts.texts} />
+
+          <canvas
+            ref={canvasRef}
             className="w-full h-full bg-transparent relative z-10"
+            style={{ touchAction: 'none' }}
           />
+
+          {/* P2: drag hint overlay */}
+          <div className="absolute bottom-4 left-4 px-2 py-1 bg-black/60 border border-[#00FF41]/20 text-[10px] font-mono text-[#00FF41]/70 pointer-events-none">
+            {t.game_drag_hint}
+          </div>
         </section>
 
         <aside className="w-[26rem] bg-[#001100] border-l border-[#00FF41]/30 p-4 flex flex-col gap-4 overflow-y-auto">
@@ -1262,28 +1630,33 @@ export function GameScreen({ onGameOver, onQuit, lang, setLang, difficulty, dlcC
                   />
                 ))}
               </div>
+
+              <div className="mt-4 pt-3 border-t border-[#00FF41]/10">
+                <ParamPresets
+                  funcType={funcType}
+                  params={params}
+                  onApply={(newParams) => setParams(newParams)}
+                  onRestoreLast={handleRestoreLast}
+                  hasLast={!!lastFiredParams[funcType]}
+                  lang={lang}
+                />
+              </div>
             </div>
 
-            <button 
-              onClick={handleFire}
+            <FireButton
               disabled={cooldown > 0 || formulaError !== null || ((funcType === 'trigonometric' || funcType === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent'))}
-              className={`w-full py-3 font-black uppercase tracking-tighter transition-transform active:scale-[0.98] flex flex-col items-center justify-center ${
-                cooldown > 0 || formulaError !== null || ((funcType === 'trigonometric' || funcType === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent'))
-                  ? 'bg-black border border-[#FFB000]/50 text-[#FFB000]/50 cursor-not-allowed' 
-                  : 'bg-[#FFB000] text-black hover:bg-[#ffc800]'
-              }`}
-            >
-              <span>{
-                cooldown > 0 
-                  ? `${t.game_recharging} ${(cooldown/1000).toFixed(1)}s` 
-                  : ((funcType === 'trigonometric' || funcType === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent'))
-                    ? t.game_trig_cooldown
-                    : formulaError 
-                      ? t.game_invalid 
-                      : t.game_fire
-              }</span>
-              {cooldown === 0 && !formulaError && !((funcType === 'trigonometric' || funcType === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent')) && <span className="text-[10px] opacity-70 font-mono mt-1 tracking-widest">[ENTER] or [SPACE]</span>}
-            </button>
+              cooldown={cooldown}
+              maxCooldown={maxCooldown}
+              label={t.game_fire}
+              cooldownLabel={t.game_recharging}
+              trigCooldownLabel={t.game_trig_cooldown}
+              invalidLabel={t.game_invalid}
+              trigLocked={(funcType === 'trigonometric' || funcType === 'tangent') && (lastUsedFunc === 'trigonometric' || lastUsedFunc === 'tangent')}
+              invalid={formulaError !== null}
+              onClick={handleFire}
+              onCooldownReady={() => audio.playChargeComplete()}
+              shortcutHint={<span>[ENTER] or [SPACE]</span>}
+            />
           </div>
         </aside>
       </main>
